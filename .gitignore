@@ -1,11 +1,7 @@
 .theos/
 packages/*.deb
 */packages/*.deb
-appstored_*
-itunesstored_*
-iTunesStore.*
-*.hop
-send_payload.py
+refs/
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/macos,xcode,objective-c,cocoapods

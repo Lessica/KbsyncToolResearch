@@ -53,11 +53,26 @@
 - (AMSURLRequest *)initWithRequest:(NSURLRequest *)urlRequest;
 @end
 
+@interface NSMutableURLRequest (AMSURLRequest)
+- (void)ams_addXTokenHeaderWithAccount:(ACAccount *)account;
+@end
+
 @interface AMSBagNetworkDataSource : NSObject
 @end
 
 @interface AMSPromise : NSObject
-- (NSDictionary *)resultWithError:(NSError **)errPtr;
+- (id)resultWithError:(NSError **)errPtr;
+@end
+
+@interface AMSPurchaseTask: NSObject
++ (AMSBagNetworkDataSource *)createBagForSubProfile;
+@end
+
+@interface AMSGenerateFraudScoreTask : NSObject
+- (AMSGenerateFraudScoreTask *)initWithAction:(unsigned long long)arg1 account:(id)arg2 purchaseIdentifier:(id)arg3 bag:(id)arg4 logKey:(id)arg5;  // 15.2.1
+- (AMSGenerateFraudScoreTask *)initWithAction:(unsigned long long)arg1 account:(id)arg2 bag:(id)arg3 logKey:(id)arg4;  // 14.7
+- (AMSGenerateFraudScoreTask *)initWithAction:(unsigned long long)arg1 account:(id)arg2 bag:(id)arg3;  // 14.4
+- (AMSPromise *)runTask;
 @end
 
 @interface AMSAnisette : NSObject
@@ -188,10 +203,7 @@ static CFDataRef Callback(
         CFDataRef machine_id = NULL;
         while (*machine_id_caller++ != *(uint32_t *)&movn_x0_0x0[0]);
         NSLog(@"Parsed machine_id caller: %p.", machine_id_caller);
-
-        // decode the bl instruction to get the real kbsyn callee
-        // 31 30 29 28 27 26 25 ... 0
-        //  1  0  0  1  0  1  - imm -
+        
         int blopcode, blmask;
         blopcode = *(int *)machine_id_caller;
         blmask = 0xFC000000;
@@ -271,25 +283,35 @@ static CFDataRef Callback(
 
     NSURL *url = [NSURL URLWithString:args[@"url"]];
     ISStoreURLOperation *operation = [[NSClassFromString(@"ISStoreURLOperation") alloc] init];
-    NSURLRequest *urlRequest = [operation newRequestWithURL:url];
-    AMSURLRequest *amsRequest = [[NSClassFromString(@"AMSURLRequest") alloc] initWithRequest:urlRequest];
-    NSMutableDictionary *headerFields = [[urlRequest allHTTPHeaderFields] mutableCopy];
+    NSMutableURLRequest *urlRequest = [[operation newRequestWithURL:url] mutableCopy];
 
     ACAccount *amsAccount = [[ACAccountStore ams_sharedAccountStore] ams_activeiTunesAccount];
-    AMSBagNetworkDataSource *bagSource = [NSClassFromString(@"AMSAnisette") createBagForSubProfile];
-    NSDictionary *amsHeader1 = [[NSClassFromString(@"AMSAnisette") headersForRequest:amsRequest account:amsAccount type:1 bag:bagSource] resultWithError:nil];
-    if ([amsHeader1 isKindOfClass:[NSDictionary class]]) {
-        [headerFields addEntriesFromDictionary:amsHeader1];
+    if (amsAccount) {
+        [urlRequest ams_addXTokenHeaderWithAccount:amsAccount];
+
+        AMSURLRequest *amsRequest = [[NSClassFromString(@"AMSURLRequest") alloc] initWithRequest:urlRequest];
+        NSMutableDictionary *headerFields = [[urlRequest allHTTPHeaderFields] mutableCopy];
+
+        AMSBagNetworkDataSource *purchaseBag = [NSClassFromString(@"AMSPurchaseTask") createBagForSubProfile];
+        AMSGenerateFraudScoreTask *scoreTask = [[NSClassFromString(@"AMSGenerateFraudScoreTask") alloc] initWithAction:0 account:amsAccount bag:purchaseBag];
+        NSString *scoreString = [[scoreTask runTask] resultWithError:nil];
+        if ([scoreString isKindOfClass:[NSString class]]) {
+            returnDict[@"afds"] = scoreString;
+        }
+
+        AMSBagNetworkDataSource *anisetteBag = [NSClassFromString(@"AMSAnisette") createBagForSubProfile];
+        NSDictionary *amsHeader1 = [[NSClassFromString(@"AMSAnisette") headersForRequest:amsRequest account:amsAccount type:1 bag:anisetteBag] resultWithError:nil];
+        if ([amsHeader1 isKindOfClass:[NSDictionary class]]) {
+            [headerFields addEntriesFromDictionary:amsHeader1];
+        }
+        NSDictionary *amsHeader2 = [[NSClassFromString(@"AMSAnisette") headersForRequest:amsRequest account:amsAccount type:2 bag:anisetteBag] resultWithError:nil];
+        if ([amsHeader2 isKindOfClass:[NSDictionary class]]) {
+            [headerFields addEntriesFromDictionary:amsHeader2];
+        }
+        [headerFields removeObjectForKey:@"Authorization"];
+
+        returnDict[@"headers"] = headerFields;
     }
-
-    NSDictionary *amsHeader2 = [[NSClassFromString(@"AMSAnisette") headersForRequest:amsRequest account:amsAccount type:2 bag:bagSource] resultWithError:nil];
-    if ([amsHeader2 isKindOfClass:[NSDictionary class]]) {
-        [headerFields addEntriesFromDictionary:amsHeader2];
-    }
-
-    [headerFields removeObjectForKey:@"Authorization"];
-
-    returnDict[@"headers"] = headerFields;
 
     NSString *kbsyncString = nil;
     if ([args[@"kbsyncType"] isEqualToString:@"hex"]) {
