@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>_AdditionalProperties</key>
+	<dict>
+		<key>RunningBoard</key>
+		<dict>
+			<key>Managed</key>
+			<false/>
+			<key>Reported</key>
+			<false/>
+		</dict>
+	</dict>
+	<key>HighPriorityIO</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/var/logs/com.darwindev.kbsynctool.stdout.log</string>
+	<key>StandardErrorPath</key>
+	<string>/var/logs/com.darwindev.kbsynctool.stderr.log</string>
+	<key>WorkingDirectory</key>
+	<string>/var/root</string>
+	<key>UserName</key>
+	<string>root</string>
+	<key>Label</key>
+	<string>com.darwindev.kbsynctool</string>
+	<key>EnableTransactions</key>
+	<false/>
+	<key>EnablePressuredExit</key>
+	<false/>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/bin/kbsynctool</string>
+		<string>-s</string>
+		<string>9000</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>5</integer>
+	<key>POSIXSpawnType</key>
+	<string>Interactive</string>
+	<key>ProcessType</key>
+	<string>Interactive</string>
+</dict>
+</plist>

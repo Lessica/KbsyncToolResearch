@@ -1,9 +1,11 @@
 #import <stdio.h>
+#import <notify.h>
+#import <objc/objc.h>
 #import <objc/runtime.h>
 #import <mach-o/dyld.h>
 
-#import <Foundation/Foundation.h>
 #import <Accounts/Accounts.h>
+#import <Foundation/Foundation.h>
 #import <rocketbootstrap/rocketbootstrap.h>
 #import "pac_helper.h"
 
@@ -339,18 +341,88 @@ static CFDataRef Callback(
     return nil;
 }
 
+
+#pragma mark - appstored
+
+static NSString *flushReason = nil;
+static NSString *resetReason = nil;
+
+@interface LegacyActivityManager : NSObject
++ (instancetype)sharedInstance;
+- (void)scheduleAppUsageFlushDnuWithReason:(NSString *)reason;
+- (void)resetAppUsageTaskWithReason:(NSString *)reason;
+- (id)_addAppUsageFlushTask:(id)arg1 forceReset:(_Bool)arg2 activityName:(id)arg3 scheduledDate:(NSDate *)arg4 refreshInverval:(long long)arg5;
+@end
+
+
+%group Diagnostics
+
+%hook MCProfileConnection
+- (BOOL)isDiagnosticSubmissionAllowed { return YES; }
+%end
+
+%hook ASDLogConfig
+- (BOOL)shouldLog { return YES; }
+%end
+
+%hook AppDefaultsManager
++ (void)setAppUsageNextPostTargetDate:(NSDate *)date {
+    if ([resetReason isEqualToString:@"Reset Immediately"]) {
+        %log;
+        %orig([NSDate date]);
+        return;
+    }
+    %orig(date);
+}
+%end
+
+%hook BackgroundTaskRequest
++ (id)xpcActivityWithDuration:(id)arg1 gracePeriod:(long long)arg2 {
+    if ([resetReason isEqualToString:@"Reset Immediately"]) {
+        %log;
+        resetReason = nil;
+        return %orig([NSDate date], arg2);
+    }
+    return %orig(arg1, arg2);
+}
+%end
+
+%hook LegacyActivityManager
+- (void)scheduleAppUsageFlushDnuWithReason:(NSString *)reason {
+    %log;
+    flushReason = reason;
+    %orig(reason);
+}
+- (void)resetAppUsageTaskWithReason:(NSString *)reason {
+    %log;
+    resetReason = reason;
+    %orig(reason);
+}
+- (id)_addAppUsageFlushTask:(id)arg1 forceReset:(_Bool)arg2 activityName:(id)arg3 scheduledDate:(NSDate *)arg4 refreshInverval:(long long)arg5 {
+    if ([flushReason isEqualToString:@"Flush Immediately"]) {
+        %log;
+        flushReason = nil;
+        return %orig(arg1, arg2, arg3, [NSDate date], 0);
+    }
+    return %orig(arg1, arg2, arg3, arg4, arg5);
+}
+%end
+
+%end
+
 %ctor {
     
-    if ([[[NSProcessInfo processInfo] processName] isEqualToString:@"itunesstored"]) {
+    NSString *processName = [[NSProcessInfo processInfo] processName];
+    if ([processName isEqualToString:@"itunesstored"]) {
 
         static CFMessagePortRef localPort = nil;
         static dispatch_once_t onceToken;
 
         dispatch_once(&onceToken, ^{
-            rocketbootstrap_unlock("com.darwindev.kbsync.port");
+            rocketbootstrap_unlock("com.darwindev.itunesstored.kbsync.port");
             localPort = CFMessagePortCreateLocal(
                 nil,
-                CFSTR("com.darwindev.kbsync.port"),
+                CFSTR("com.darwindev.itunesstored.kbsync.port"),
                 Callback,
                 nil,
                 nil
@@ -367,5 +439,19 @@ static CFDataRef Callback(
         );
 
         rocketbootstrap_cfmessageportexposelocal(localPort);
+    }
+    else if ([processName isEqualToString:@"appstored"]) {
+
+        %init(Diagnostics);
+
+        int appUsageFlushToken;
+        notify_register_dispatch("com.darwindev.kbsync.app-usage.flush", &appUsageFlushToken, dispatch_get_main_queue(), ^(int token) {
+            [[NSClassFromString(@"LegacyActivityManager") sharedInstance] scheduleAppUsageFlushDnuWithReason:@"Flush Immediately"];
+        });
+
+        int appUsageResetToken;
+        notify_register_dispatch("com.darwindev.kbsync.app-usage.reset", &appUsageResetToken, dispatch_get_main_queue(), ^(int token) {
+            [[NSClassFromString(@"LegacyActivityManager") sharedInstance] resetAppUsageTaskWithReason:@"Reset Immediately"];
+        });
     }
 }

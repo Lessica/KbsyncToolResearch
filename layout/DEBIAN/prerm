@@ -1,0 +1,8 @@
+#!/bin/bash
+
+launchctl unload "/Library/LaunchDaemons/com.darwindev.kbsynctool.plist" > /dev/null 2>&1
+launchctl remove com.darwindev.kbsynctool > /dev/null 2>&1
+
+killall -9 AppStore itunesstored appstored > /dev/null 2>&1
+
+exit 0
