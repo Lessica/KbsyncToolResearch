@@ -351,6 +351,7 @@ static NSString *resetReason = nil;
 + (instancetype)sharedInstance;
 - (void)scheduleAppUsageFlushDnuWithReason:(NSString *)reason;
 - (void)resetAppUsageTaskWithReason:(NSString *)reason;
+- (id)_addAppUsageRecordDnuMetricsTask:(id)arg1;
 - (id)_addAppUsageFlushTask:(id)arg1 forceReset:(_Bool)arg2 activityName:(id)arg3 scheduledDate:(NSDate *)arg4 refreshInverval:(long long)arg5;
 @end
 
@@ -380,7 +381,6 @@ static NSString *resetReason = nil;
 + (id)xpcActivityWithDuration:(id)arg1 gracePeriod:(long long)arg2 {
     if ([resetReason isEqualToString:@"Reset Immediately"]) {
         %log;
-        resetReason = nil;
         return %orig([NSDate date], arg2);
     }
     return %orig(arg1, arg2);
@@ -398,11 +398,24 @@ static NSString *resetReason = nil;
     resetReason = reason;
     %orig(reason);
 }
+- (NSInteger)_appUsageSpreadPeriod {
+    %log; return 0;
+}
+- (id)_addAppUsageRecordDnuMetricsTask:(id)arg1 {
+    if ([resetReason isEqualToString:@"Reset Immediately"]) {
+        %log;
+        id orig = %orig(arg1);
+        resetReason = nil;
+        return orig;
+    }
+    return %orig(arg1);
+}
 - (id)_addAppUsageFlushTask:(id)arg1 forceReset:(_Bool)arg2 activityName:(id)arg3 scheduledDate:(NSDate *)arg4 refreshInverval:(long long)arg5 {
     if ([flushReason isEqualToString:@"Flush Immediately"]) {
         %log;
+        id orig = %orig(arg1, arg2, arg3, [NSDate date], 0);
         flushReason = nil;
-        return %orig(arg1, arg2, arg3, [NSDate date], 0);
+        return orig;
     }
     return %orig(arg1, arg2, arg3, arg4, arg5);
 }
