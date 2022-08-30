@@ -8,6 +8,7 @@
 #import <Foundation/Foundation.h>
 #import <rocketbootstrap/rocketbootstrap.h>
 #import "pac_helper.h"
+#import "NSData+GZIP.h"
 
 
 @interface MicroPaymentQueueRequest : NSObject
@@ -421,7 +422,43 @@ static NSString *resetReason = nil;
 }
 %end
 
+%end  // Diagnostics
+
+%group DiagnosticsDebugging
+
+%hook AMSURLSession
+- (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request completionHandler:(id)arg3
+{
+    if ([[[request URL] absoluteString] hasPrefix:@"https://xp.apple.com/report/2/xp_amp_app_usage_dnu"])
+    {
+        NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:@"xp_amp_app_usage_dnu.request.json"];
+        %log(path);
+        NSData *httpBody = [request HTTPBody];
+        NSData *decompressedBody = [httpBody gunzippedData];
+        [decompressedBody writeToFile:path atomically:YES];
+    }
+    return %orig(request, arg3);
+}
+- (void)URLSession:(NSURLSession *)session
+          dataTask:(NSURLSessionDataTask *)dataTask
+didReceiveResponse:(NSURLResponse *)response
+ completionHandler:(void (^)(NSURLSessionResponseDisposition disposition))completionHandler
+{
+    if ([[[dataTask.originalRequest URL] absoluteString] hasPrefix:@"https://xp.apple.com/report/2/xp_amp_app_usage_dnu"])
+    {
+        if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
+            NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
+            NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:@"xp_amp_app_usage_dnu.response.headers.plist"];
+            %log(path);
+            [[httpResponse allHeaderFields] writeToFile:path atomically:YES];
+        }
+    }
+    %orig(session, dataTask, response, completionHandler);
+}
 %end
+
+%end  // DiagnosticsDebugging
+
 
 %ctor {
     
@@ -456,6 +493,9 @@ static NSString *resetReason = nil;
     else if ([processName isEqualToString:@"appstored"]) {
 
         %init(Diagnostics);
+#if DEBUG
+        %init(DiagnosticsDebugging);
+#endif
 
         int appUsageFlushToken;
         notify_register_dispatch("com.darwindev.kbsync.app-usage.flush", &appUsageFlushToken, dispatch_get_main_queue(), ^(int token) {
