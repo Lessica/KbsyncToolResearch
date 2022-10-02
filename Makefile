@@ -10,7 +10,7 @@ TWEAK_NAME = KbsyncTweak
 
 KbsyncTweak_FILES = Tweak.xm
 KbsyncTweak_FILES += NSData+GZIP.m
-KbsyncTweak_CFLAGS = -fobjc-arc -Wno-unused-variable
+KbsyncTweak_CFLAGS = -fobjc-arc -Wno-unused-variable -Wno-unused-function
 KbsyncTweak_LIBRARIES = rocketbootstrap
 KbsyncTweak_PRIVATE_FRAMEWORKS = Accounts AppSupport StoreServices
 include $(THEOS_MAKE_PATH)/tweak.mk

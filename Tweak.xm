@@ -296,7 +296,12 @@ static CFDataRef Callback(
         NSMutableDictionary *headerFields = [[urlRequest allHTTPHeaderFields] mutableCopy];
 
         AMSBagNetworkDataSource *purchaseBag = [NSClassFromString(@"AMSPurchaseTask") createBagForSubProfile];
-        AMSGenerateFraudScoreTask *scoreTask = [[NSClassFromString(@"AMSGenerateFraudScoreTask") alloc] initWithAction:0 account:amsAccount bag:purchaseBag];
+        AMSGenerateFraudScoreTask *scoreTask = nil;
+        Class AMSGenerateFraudScoreTask = NSClassFromString(@"AMSGenerateFraudScoreTask");
+        if ([AMSGenerateFraudScoreTask instancesRespondToSelector:@selector(initWithAction:account:bag:)])
+            scoreTask = [[AMSGenerateFraudScoreTask alloc] initWithAction:0 account:amsAccount bag:purchaseBag];
+        if ([AMSGenerateFraudScoreTask instancesRespondToSelector:@selector(initWithAction:account:bag:logKey:)])
+            scoreTask = [[AMSGenerateFraudScoreTask alloc] initWithAction:0 account:amsAccount bag:purchaseBag logKey:@"com.apple.iTunesStore"];
         NSString *scoreString = [[scoreTask runTask] resultWithError:nil];
         if ([scoreString isKindOfClass:[NSString class]]) {
             returnDict[@"afds"] = scoreString;
